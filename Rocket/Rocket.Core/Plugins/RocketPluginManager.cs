@@ -243,7 +243,6 @@ namespace Rocket.Core.Plugins
             IntPtr domain,
             IEnumerable<string> candidateDllPaths)
         {
-            // Avoid reloading same simple name
             HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
 
             foreach (string p in candidateDllPaths)
