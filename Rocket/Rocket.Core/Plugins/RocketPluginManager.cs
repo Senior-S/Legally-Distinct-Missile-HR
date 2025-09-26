@@ -18,12 +18,10 @@ namespace Rocket.Core.Plugins
 
         public event PluginsLoaded OnPluginsLoaded;
 
-        [DllImport(@"E:\SteamLibrary\steamapps\common\U3DS\MonoBleedingEdge\EmbedRuntime\mono-2.0-bdwgc.dll",
-            CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("mono-2.0-bdwgc.dll", CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr mono_hr_create_domain(string name);
 
-        [DllImport(@"E:\SteamLibrary\steamapps\common\U3DS\MonoBleedingEdge\EmbedRuntime\mono-2.0-bdwgc.dll",
-            CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("mono-2.0-bdwgc.dll", CallingConvention = CallingConvention.Cdecl)]
         internal static extern int mono_hr_unload_domain(IntPtr handle);
 
         private static Dictionary<string, (IntPtr, GameObject)> pluginDomains = new();
