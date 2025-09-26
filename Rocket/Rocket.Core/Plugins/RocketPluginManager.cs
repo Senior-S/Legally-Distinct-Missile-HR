@@ -175,6 +175,7 @@ namespace Rocket.Core.Plugins
                 try
                 {
                     Logging.Logger.LogWarning($"Unloading {pluginName} domain");
+                    Destroy(items.Item2);
                     mono_hr_unload_domain(items.Item1);
                     pluginDomains.Remove(pluginName);
                 }
