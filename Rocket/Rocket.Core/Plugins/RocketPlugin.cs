@@ -119,7 +119,7 @@ namespace Rocket.Core.Plugins
             R.Commands.DeregisterFromAssembly(Assembly);
             Unload();
             
-            R.Plugins.ManageReload(this.Name);
+            R.Plugins.ManageReload(Assembly);
         }
 
         public virtual void LoadPlugin()
@@ -182,7 +182,7 @@ namespace Rocket.Core.Plugins
             R.Commands.DeregisterFromAssembly(Assembly);
             Unload();
             this.state = state;
-            R.Plugins.UnloadPlugin(Name);
+            R.Plugins.UnloadPlugin(Assembly);
         }
 
         private void OnEnable()

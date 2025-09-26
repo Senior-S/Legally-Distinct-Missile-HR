@@ -26,7 +26,7 @@ namespace Rocket.Core.Plugins
 
         private static Dictionary<string, (IntPtr, GameObject)> pluginDomains = new();
 
-        private static List<Assembly> pluginAssemblies;
+        //private static List<Assembly> pluginAssemblies;
         
         internal static List<IRocketPlugin> Plugins
         {
@@ -74,9 +74,11 @@ namespace Rocket.Core.Plugins
             return GetPlugin(assembly.GetName().Name);
         }
 
-        public void ManageReload(string pluginName)
+        public void ManageReload(Assembly assembly)
         {
-            UnloadPlugin(pluginName);
+            UnloadPlugin(assembly);
+            
+            string pluginName = assembly.GetName().Name;
             
             string pluginPath = libraries.FirstOrDefault(c => c.Key.Name == pluginName).Value;
             _ = ForceLoadPlugin(pluginPath);
@@ -133,19 +135,21 @@ namespace Rocket.Core.Plugins
                     libraries.Add(pair.Key, pair.Value);
             }
 
-            pluginAssemblies = LoadAssembliesFromDirectory(Environment.PluginsDirectory);
+            List<Assembly> pluginAssemblies = LoadAssembliesFromDirectory(Environment.PluginsDirectory);
 
             List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(pluginAssemblies, "IRocketPlugin");
             foreach (Type pluginType in pluginImplementations)
             {
+                AssemblyName assemblyName = pluginType.Assembly.GetName();
+                
                 GameObject plugin = new(pluginType.Name, pluginType);
                 DontDestroyOnLoad(plugin);
-                string pluginName = pluginType.Assembly.GetName().Name;
-                (IntPtr, GameObject) domain = pluginDomains[pluginName];
+                string pluginName = assemblyName.Name;
+                // If the plugin is missing a lib, it will be removed from pluginDomains so we can just skip it
+                if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) domain)) continue;
                 domain.Item2 = plugin;
                 pluginDomains[pluginName] = domain;
             }
-
             OnPluginsLoaded.TryInvoke();
         }
 
@@ -156,8 +160,16 @@ namespace Rocket.Core.Plugins
                 try
                 {
                     Logging.Logger.LogWarning($"Unloading {kv.Key} domain and game object");
-                    mono_hr_unload_domain(kv.Value.Item1);
-                    Destroy(kv.Value.Item2);
+
+                    if (kv.Value.Item2 != null)
+                    {
+                        Destroy(kv.Value.Item2);
+                    }
+
+                    if (kv.Value.Item1 != IntPtr.Zero)
+                    {
+                        mono_hr_unload_domain(kv.Value.Item1);    
+                    }
                 }
                 catch (Exception e)
                 {
@@ -168,21 +180,30 @@ namespace Rocket.Core.Plugins
             pluginDomains.Clear();
         }
 
-        internal void UnloadPlugin(string pluginName)
+        internal void UnloadPlugin(Assembly assembly)
         {
-            if (pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) items))
+            AssemblyName assemblyName = assembly.GetName();
+            libraries.Remove(assemblyName);
+            string pluginName = assemblyName.Name;
+
+            if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) items)) return;
+            
+            try
             {
-                try
+                if (items.Item2 is not null)
                 {
-                    Logging.Logger.LogWarning($"Unloading {pluginName} domain");
-                    Destroy(items.Item2);
+                    Destroy(items.Item2);    
+                }
+                if (items.Item1 != IntPtr.Zero)
+                {
                     mono_hr_unload_domain(items.Item1);
-                    pluginDomains.Remove(pluginName);
                 }
-                catch (Exception e)
-                {
-                    Logging.Logger.LogError(e, "Failed to unload plugin domain: " + pluginName);
-                }
+
+                pluginDomains.Remove(pluginName);
+            }
+            catch (Exception e)
+            {
+                Logging.Logger.LogError(e, "Failed to unload plugin domain: " + pluginName);
             }
         }
 
@@ -265,8 +286,6 @@ namespace Rocket.Core.Plugins
                 if (dep != null)
                     loaded.Add(an.Name);
             }
-
-            Logging.Logger.Log($"Loaded {loaded.Count} domain dependencies");
         }
 
         public static List<Assembly> LoadAssembliesFromDirectory(string directory, string extension = "*.dll")
@@ -315,6 +334,8 @@ namespace Rocket.Core.Plugins
                 // 'libraries' should already be populated from Environment.LibrariesDirectory
                 PreloadDomainDependencies(items.Item1, libraries.Values);
 
+                Logging.Logger.Log("Domain dependencies loaded, loading plugin...");
+                
                 // 2) Load the plugin itself
                 Assembly assembly = TryLoadIntoDomain(items.Item1, fullPath);
                 if (assembly == null)
