@@ -22,7 +22,7 @@ namespace Rocket.Core.Utils
 
         public static List<Type> GetTypes(List<Assembly> assemblies)
         {
-            List<Type> allTypes = new List<Type>();
+            List<Type> allTypes = [];
             foreach (Assembly assembly in assemblies)
             {
                 Type[] types;
@@ -41,7 +41,7 @@ namespace Rocket.Core.Utils
 
         public static List<Type> GetTypesFromParentClass(Assembly assembly, Type parentClass)
         {
-            List<Type> allTypes = new List<Type>();
+            List<Type> allTypes = [];
             Type[] types;
             try
             {
@@ -63,7 +63,7 @@ namespace Rocket.Core.Utils
 
         public static List<Type> GetTypesFromParentClass(List<Assembly> assemblies, Type parentClass)
         {
-            List<Type> allTypes = new List<Type>();
+            List<Type> allTypes = [];
             foreach (Assembly assembly in assemblies)
             {
                 allTypes.AddRange(GetTypesFromParentClass(assembly, parentClass));
@@ -73,7 +73,7 @@ namespace Rocket.Core.Utils
 
         public static List<Type> GetTypesFromInterface(List<Assembly> assemblies, string interfaceName)
         {
-            List<Type> allTypes = new List<Type>();
+            List<Type> allTypes = [];
             foreach (Assembly assembly in assemblies)
             {
                 allTypes.AddRange(GetTypesFromInterface(assembly, interfaceName));
@@ -83,7 +83,7 @@ namespace Rocket.Core.Utils
 
         public static List<Type> GetTypesFromInterface(Assembly assembly, string interfaceName)
         {
-            List<Type> allTypes = new List<Type>();
+            List<Type> allTypes = [];
             Type[] types;
             try
             {

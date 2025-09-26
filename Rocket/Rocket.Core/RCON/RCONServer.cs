@@ -13,7 +13,7 @@ namespace Rocket.Core.RCON
 {
     public class RCONServer : MonoBehaviour
     {
-        private static List<RCONConnection> clients = new List<RCONConnection>();
+        private static List<RCONConnection> clients = [];
         public static List<RCONConnection> Clients { get { return clients; } }
         private TcpListener listener;
         private bool exiting = false;
@@ -194,7 +194,7 @@ namespace Rocket.Core.RCON
         {
             exiting = true;
             // Force all connected RCON clients to disconnect from the server on shutdown. The server will get stuck in the shutdown process until all clients disconnect.
-            List<RCONConnection> connections = new List<RCONConnection>();
+            List<RCONConnection> connections = [];
             connections.AddRange(clients);
             foreach (RCONConnection client in connections)
             {
@@ -208,7 +208,7 @@ namespace Rocket.Core.RCON
         public static string Read(TcpClient client, bool auth)
         {
             byte[] _data = new byte[1];
-            List<byte> dataArray = new List<byte>();
+            List<byte> dataArray = [];
             string data = "";
             int loopCount = 0;
             int skipCount = 0;

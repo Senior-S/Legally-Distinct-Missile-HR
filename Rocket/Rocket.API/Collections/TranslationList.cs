@@ -45,7 +45,7 @@ namespace Rocket.API.Collections
     public class TranslationList : IDefaultable, IEnumerable<TranslationListEntry>
     {
         public TranslationList() { }
-        protected List<TranslationListEntry> translations = new List<TranslationListEntry>();
+        protected List<TranslationListEntry> translations = [];
 
         public IEnumerator<TranslationListEntry> GetEnumerator()
         {

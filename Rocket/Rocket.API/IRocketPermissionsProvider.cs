@@ -10,7 +10,7 @@ namespace Rocket.API
     {
         public static bool HasPermission(this IRocketPermissionsProvider rocketPermissionProvider,IRocketPlayer player, string permission)
         {
-            return rocketPermissionProvider.HasPermission(player, new List<string>() { permission });
+            return rocketPermissionProvider.HasPermission(player, [permission]);
         }
 
         public static bool HasPermission(this IRocketPermissionsProvider rocketPermissionProvider, IRocketPlayer player, IRocketCommand command)
@@ -24,7 +24,7 @@ namespace Rocket.API
 
         public static List<Permission> GetPermissions(this IRocketPermissionsProvider rocketPermissionProvider, IRocketPlayer player, string permission)
         {
-            return rocketPermissionProvider.GetPermissions(player, new List<string>() { permission });
+            return rocketPermissionProvider.GetPermissions(player, [permission]);
         }
 
         public static List<Permission> GetPermissions(this IRocketPermissionsProvider rocketPermissionProvider, IRocketPlayer player, IRocketCommand command)

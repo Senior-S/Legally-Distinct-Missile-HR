@@ -10,11 +10,11 @@ namespace Rocket.Core.Serialization
     {
         public void LoadDefaults()
         {
-            CommandMappings = new List<CommandMapping>();
+            CommandMappings = [];
         }
 
         [XmlArray("Commands")]
         [XmlArrayItem("Command")]
-        public List<CommandMapping> CommandMappings = new List<CommandMapping>();
+        public List<CommandMapping> CommandMappings = [];
     }
 }

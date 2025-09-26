@@ -3,8 +3,6 @@ using Rocket.Core.Logging;
 using Rocket.Core.RCON;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace Rocket.Core.Commands
 {
@@ -12,7 +10,7 @@ namespace Rocket.Core.Commands
     {
         public List<string> Aliases
         {
-            get { return new List<string>(); }
+            get { return []; }
         }
 
         public AllowedCaller AllowedCaller
@@ -32,7 +30,7 @@ namespace Rocket.Core.Commands
 
         public List<string> Permissions
         {
-            get { return new List<string>() { "rocket.rwho" }; }
+            get { return ["rocket.rwho"]; }
         }
 
         public string Syntax

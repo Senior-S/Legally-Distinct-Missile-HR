@@ -97,7 +97,7 @@ namespace Rocket.Core.Steam
 
                 if (doc["profile"]["mostPlayedGames"] != null)
                 {
-                    MostPlayedGames = new List<MostPlayedGame>(); field = "MostPlayedGames";
+                    MostPlayedGames = []; field = "MostPlayedGames";
                     foreach (XmlElement mostPlayedGame in doc["profile"]["mostPlayedGames"].ChildNodes)
                     {
                         MostPlayedGame newMostPlayedGame = new MostPlayedGame();
@@ -114,7 +114,7 @@ namespace Rocket.Core.Steam
 
                 if (doc["profile"]["groups"] != null)
                 {
-                    Groups = new List<Group>(); field = "Groups";
+                    Groups = []; field = "Groups";
                     foreach (XmlElement group in doc["profile"]["groups"].ChildNodes)
                     {
                         Group newGroup = new Group();

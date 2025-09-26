@@ -88,7 +88,8 @@ namespace Rocket.Core.Plugins
 
             if (DefaultTranslations != null | DefaultTranslations.Count() != 0)
             {
-                translations = new XMLFileAsset<TranslationList>(Path.Combine(Directory,String.Format(Environment.PluginTranslationFileTemplate, Name, R.Settings.Instance.LanguageCode)), new Type[] { typeof(TranslationList), typeof(TranslationListEntry) }, DefaultTranslations);
+                translations = new XMLFileAsset<TranslationList>(Path.Combine(Directory,String.Format(Environment.PluginTranslationFileTemplate, Name, R.Settings.Instance.LanguageCode)),
+                    [typeof(TranslationList), typeof(TranslationListEntry)], DefaultTranslations);
                 DefaultTranslations.AddUnknownEntries(translations);
             }
         }
@@ -113,8 +114,12 @@ namespace Rocket.Core.Plugins
 
         public void ReloadPlugin()
         {
-            UnloadPlugin();
-            LoadPlugin();
+            Logging.Logger.Log("\n[unloading] " + Name, ConsoleColor.Cyan);
+            OnPluginUnloading.TryInvoke(this);
+            R.Commands.DeregisterFromAssembly(Assembly);
+            Unload();
+            
+            R.Plugins.ManageReload(this.Name);
         }
 
         public virtual void LoadPlugin()
@@ -177,11 +182,12 @@ namespace Rocket.Core.Plugins
             R.Commands.DeregisterFromAssembly(Assembly);
             Unload();
             this.state = state;
+            R.Plugins.UnloadPlugin(Name);
         }
 
         private void OnEnable()
         {
-                LoadPlugin();
+            LoadPlugin();
         }
 
         private void OnDisable()

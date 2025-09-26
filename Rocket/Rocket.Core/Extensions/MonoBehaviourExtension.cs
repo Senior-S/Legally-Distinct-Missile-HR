@@ -21,7 +21,7 @@ namespace Rocket.Core.Extensions
 
             Type instance = behaviour.GetType();
             MethodInfo mthd = instance.GetMethod(method);
-            mthd.Invoke(behaviour, new object[] { options });
+            mthd.Invoke(behaviour, [options]);
 
             yield return null;
         }

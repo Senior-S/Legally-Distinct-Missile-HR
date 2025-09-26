@@ -12,7 +12,7 @@ namespace Rocket.Core.Commands
     {
         public List<string> Aliases
         {
-            get { return new List<string>(); }
+            get { return []; }
         }
 
         public AllowedCaller AllowedCaller
@@ -32,7 +32,7 @@ namespace Rocket.Core.Commands
 
         public List<string> Permissions
         {
-            get { return new List<string>() { "rocket.rflush" }; }
+            get { return ["rocket.rflush"]; }
         }
 
         public string Syntax
@@ -49,7 +49,7 @@ namespace Rocket.Core.Commands
             else
             {
                 Logger.Log(R.Translate("command_rflush_total", RCONServer.Clients.Count.ToString()));
-                List<RCONConnection> connections = new List<RCONConnection>();
+                List<RCONConnection> connections = [];
                 connections.AddRange(RCONServer.Clients);
                 for (int i = 0; i < connections.Count; i++)
                 {

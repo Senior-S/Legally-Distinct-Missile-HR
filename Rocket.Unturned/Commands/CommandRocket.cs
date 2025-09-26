@@ -1,6 +1,7 @@
 ﻿using SDG.Unturned;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Linq;
 using Rocket.API;
@@ -78,6 +79,18 @@ namespace Rocket.Unturned.Commands
 
             if (command.Length == 2)
             {
+                if (command[0].Equals("hrload", StringComparison.OrdinalIgnoreCase))
+                {
+                    string path = command[1];
+                    if (!File.Exists(path) || Path.GetExtension(path) != ".dll")
+                    {
+                        UnturnedChat.Say(caller, "Please provide a valid plugin path.");
+                    }
+                    
+                    R.Plugins.ForceLoadPlugin(path);
+                    return;
+                }
+                
                 RocketPlugin p = (RocketPlugin)R.Plugins.GetPlugins().Where(pl => pl.Name.ToLower().Contains(command[1].ToLower())).FirstOrDefault();
                 if (p != null)
                 {
@@ -126,8 +139,6 @@ namespace Rocket.Unturned.Commands
                     UnturnedChat.Say(caller, U.Translate("command_rocket_plugin_not_found", command[1]));
                 }
             }
-
-
         }
     }
 }

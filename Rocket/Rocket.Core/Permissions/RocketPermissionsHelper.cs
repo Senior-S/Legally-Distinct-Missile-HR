@@ -103,7 +103,7 @@ namespace Rocket.Core.Permissions
             // get player groups
             List<RocketPermissionsGroup> groups = this.permissions.Instance?.Groups?.OrderBy(x => x.Priority)
                                                       .Where(g => g.Members.Contains(player.Id))
-                                                      .ToList() ?? new List<RocketPermissionsGroup>();
+                                                      .ToList() ?? [];
 
             // get first default group
             RocketPermissionsGroup defaultGroup = this.permissions.Instance?.Groups?.OrderBy(x => x.Priority)

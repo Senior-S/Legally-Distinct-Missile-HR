@@ -13,7 +13,7 @@ namespace Rocket.Core.Commands
     {
         public List<string> Aliases
         {
-            get { return new List<string>(); }
+            get { return []; }
         }
 
         public AllowedCaller AllowedCaller
@@ -33,7 +33,7 @@ namespace Rocket.Core.Commands
 
         public List<string> Permissions
         {
-            get { return new List<string>() { "rocket.rkick" }; }
+            get { return ["rocket.rkick"]; }
         }
 
         public string Syntax

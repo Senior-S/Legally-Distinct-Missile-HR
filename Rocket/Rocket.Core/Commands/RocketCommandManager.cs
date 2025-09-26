@@ -17,8 +17,8 @@ namespace Rocket.Core.Commands
 {
     public class RocketCommandManager : MonoBehaviour
     {
-        private readonly List<RegisteredRocketCommand> commands = new List<RegisteredRocketCommand>();
-        internal List<RocketCommandCooldown> cooldown = new List<RocketCommandCooldown>();
+        private readonly List<RegisteredRocketCommand> commands = [];
+        internal List<RocketCommandCooldown> cooldown = [];
         public ReadOnlyCollection<RegisteredRocketCommand> Commands { get; internal set; }
         private XMLFileAsset<RocketCommands> commandMappings;
 
@@ -302,8 +302,8 @@ namespace Rocket.Core.Commands
 
                     if (commandAttribute != null)
                     {
-                        List<string> Permissions = new List<string>();
-                        List<string> Aliases = new List<string>();
+                        List<string> Permissions = [];
+                        List<string> Aliases = [];
 
                         if (commandAliasAttributes != null)
                         {
@@ -443,15 +443,15 @@ namespace Rocket.Core.Commands
                         break;
                     case 1:
                         if (methodParameters[0].ParameterType == typeof(IRocketPlayer))
-                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), new object[] { caller });
+                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), [caller]);
                         else if (methodParameters[0].ParameterType == typeof(string[]))
-                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), new object[] { parameters });
+                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), [parameters]);
                         break;
                     case 2:
                         if (methodParameters[0].ParameterType == typeof(IRocketPlayer) && methodParameters[1].ParameterType == typeof(string[]))
-                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), new object[] { caller, parameters });
+                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), [caller, parameters]);
                         else if (methodParameters[0].ParameterType == typeof(string[]) && methodParameters[1].ParameterType == typeof(IRocketPlayer))
-                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), new object[] { parameters, caller });
+                            method.Invoke(R.Plugins.GetPlugin(method.ReflectedType.Assembly), [parameters, caller]);
                         break;
                 }
             }
