@@ -1,14 +1,14 @@
-﻿using Rocket.API;
-using Rocket.Core.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using UnityEngine;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.Reflection;
+using Rocket.API;
 using Rocket.Core.Extensions;
-
+using Rocket.Core.Utils;
+using SDG.Framework.Modules;
+using UnityEngine;
+using Logger = Rocket.Core.Logging.Logger;
 
 namespace Rocket.Core.Plugins
 {
@@ -18,25 +18,22 @@ namespace Rocket.Core.Plugins
 
         public event PluginsLoaded OnPluginsLoaded;
 
-        [DllImport("mono-2.0-bdwgc.dll", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern IntPtr mono_hr_create_domain(string name);
+        // plugin simple name -> (domain handle, GameObject)
+        private static readonly Dictionary<string, (IntPtr, GameObject)> pluginDomains = new();
 
-        [DllImport("mono-2.0-bdwgc.dll", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern int mono_hr_unload_domain(IntPtr handle);
+        // Maps assembly name to .dll file path.
+        private static Dictionary<AssemblyName, (string Path, bool IsPlugin)> libraries = new();
 
-        private static Dictionary<string, (IntPtr, GameObject)> pluginDomains = new();
-
-        //private static List<Assembly> pluginAssemblies;
-        
         internal static List<IRocketPlugin> Plugins
         {
-            get { return pluginDomains.Values.Select(g => g.Item2.GetComponent<IRocketPlugin>()).Where(p => p != null).ToList(); }
+            get
+            {
+                return pluginDomains.Values
+                    .Select(g => g.Item2 != null ? g.Item2.GetComponent<IRocketPlugin>() : null)
+                    .Where(p => p != null)
+                    .ToList();
+            }
         }
-
-        /// <summary>
-        /// Maps assembly name to .dll file path.
-        /// </summary>
-        private static Dictionary<AssemblyName, string> libraries = new();
 
         public List<IRocketPlugin> GetPlugins()
         {
@@ -45,30 +42,51 @@ namespace Rocket.Core.Plugins
 
         public IRocketPlugin GetPlugin(Assembly assembly)
         {
-            return pluginDomains.Values.Select(g => g.Item2.GetComponent<IRocketPlugin>())
+            return pluginDomains.Values
+                .Select(g => g.Item2 != null ? g.Item2.GetComponent<IRocketPlugin>() : null)
                 .FirstOrDefault(p => p != null && p.GetType().Assembly == assembly);
         }
 
         public IRocketPlugin GetPlugin(string name)
         {
-            return pluginDomains.Values.Select(g => g.Item2.GetComponent<IRocketPlugin>())
-                .FirstOrDefault(p => p != null && ((IRocketPlugin)p).Name == name);
+            return pluginDomains.Values
+                .Select(g => g.Item2 != null ? g.Item2.GetComponent<IRocketPlugin>() : null)
+                .FirstOrDefault(p => p != null && p.Name == name);
         }
 
         public IRocketPlugin ForceLoadPlugin(string path)
         {
+            string directoryName = Path.GetDirectoryName(path)!.TrimEnd('/', '\\');
+            if (directoryName.EndsWith(Environment.LibrariesDirectory)) return null;
+
             Assembly assembly = LoadAssemblyFromPath(path);
-            if (assembly == null) return null;
-            
+            if (assembly == null)
+                return null;
+
             List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(assembly, "IRocketPlugin");
+
             foreach (Type pluginType in pluginImplementations)
             {
-                GameObject plugin = new(pluginType.Name, pluginType);
-                DontDestroyOnLoad(plugin);
-                string pluginName = pluginType.Assembly.GetName().Name;
-                (IntPtr, GameObject) domain = pluginDomains[pluginName];
-                domain.Item2 = plugin;
-                pluginDomains[pluginName] = domain;
+                try
+                {
+                    string pluginName = pluginType.Assembly.GetName().Name;
+
+                    GameObject plugin = new(pluginType.Name, pluginType);
+                    DontDestroyOnLoad(plugin);
+
+                    if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) domainTuple))
+                    {
+                        Destroy(plugin);
+                        continue;
+                    }
+
+                    domainTuple.Item2 = plugin;
+                    pluginDomains[pluginName] = domainTuple;
+                }
+                catch
+                {
+                    Logger.LogError($"Error loading {pluginType.Name}!");
+                }
             }
 
             return GetPlugin(assembly.GetName().Name);
@@ -76,43 +94,100 @@ namespace Rocket.Core.Plugins
 
         public void ManageReload(Assembly assembly)
         {
-            UnloadPlugin(assembly);
-            
-            string pluginName = assembly.GetName().Name;
-            
-            string pluginPath = libraries.FirstOrDefault(c => c.Key.Name == pluginName).Value;
+            AssemblyName assemblyName = assembly.GetName();
+            UnloadPlugin(assemblyName);
+
+            string pluginName = assemblyName.Name;
+            string pluginPath = libraries.FirstOrDefault(c => c.Key.Name == pluginName).Value.Path;
+
             _ = ForceLoadPlugin(pluginPath);
+        }
+
+        private static Assembly FindAlreadyLoaded(string simpleName)
+        {
+            return AppDomain.CurrentDomain
+                .GetAssemblies()
+                .FirstOrDefault(a =>
+                {
+                    AssemblyName assemblyName = a.GetName();
+                    return string.Equals(assemblyName.Name, simpleName, StringComparison.OrdinalIgnoreCase);
+                });
+        }
+        
+        private static bool IsPluginName(string simpleName)
+        {
+            // libraries maps AssemblyName -> (Path, IsPlugin)
+            // Find by simple name and mark if it is a plugin
+            foreach (var kv in libraries)
+                if (string.Equals(kv.Key.Name, simpleName, StringComparison.OrdinalIgnoreCase))
+                    return kv.Value.IsPlugin;
+            return false;
+        }
+
+        private static string FindPathBySimpleName(string simpleName)
+        {
+            foreach (var kv in libraries)
+                if (string.Equals(kv.Key.Name, simpleName, StringComparison.OrdinalIgnoreCase))
+                    return kv.Value.Path;
+            return null;
         }
 
         private Assembly OnAssemblyResolve(object sender, ResolveEventArgs args)
         {
             try
             {
-                AssemblyName requestedName = new(args.Name);
-                if (pluginDomains.ContainsKey(requestedName.Name))
-                    return null;
+                AssemblyName requested = new(args.Name);
+                string simple = requested.Name;
 
-                var bestMatch = libraries
-                    .FirstOrDefault(lib => string.Equals(lib.Key.Name, requestedName.Name) && lib.Key.Version >= requestedName.Version);
+                // If already loaded in this AppDomain, return it.
+                Assembly already = FindAlreadyLoaded(simple);
+                if (already != null)
+                    return already;
 
-                if (!string.IsNullOrEmpty(bestMatch.Value))
+                // Decide based on current AppDomain. Unity runs plugins in the root domain.
+                bool inRoot = AppDomain.CurrentDomain.IsDefaultAppDomain();
+
+                // If request is for a plugin assembly:
+                if (IsPluginName(simple))
                 {
-                    return Assembly.Load(File.ReadAllBytes(bestMatch.Value));
+                    if (inRoot)
+                    {
+                        // Allow loading plugin assemblies into root domain so MonoBehaviours can run.
+                        string path = FindPathBySimpleName(simple);
+                        if (!string.IsNullOrEmpty(path))
+                            return Assembly.Load(File.ReadAllBytes(path));
+                        // fall through to error
+                    }
+                    else
+                    {
+                        // In plugin AppDomain: don't load via root resolver; plugin DLLs are loaded by your icall.
+                        return null;
+                    }
                 }
+
+                // Non-plugin libs or anything else: pick best version from libraries
+                var bestMatch = libraries
+                    .OrderByDescending(c => c.Key.Version)
+                    .FirstOrDefault(lib =>
+                        string.Equals(lib.Key.Name, simple, StringComparison.OrdinalIgnoreCase) &&
+                        lib.Key.Version >= requested.Version);
+
+                if (!string.IsNullOrEmpty(bestMatch.Value.Path))
+                    return Assembly.Load(File.ReadAllBytes(bestMatch.Value.Path));
             }
             catch (Exception ex)
             {
-                Logging.Logger.LogException(ex, "Caught exception resolving dependency: " + args.Name);
+                Logger.LogException(ex, "Caught exception resolving dependency: " + args.Name);
             }
 
-            Logging.Logger.LogError("Could not find dependency: " + args.Name);
+            Logger.LogError("Could not find dependency: " + args.Name);
             return null;
         }
-
+        
         private void Awake()
         {
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
-            SDG.Framework.Modules.ModuleHook.PreVanillaAssemblyResolvePostRedirects += OnAssemblyResolve;
+            ModuleHook.PreVanillaAssemblyResolvePostRedirects += OnAssemblyResolve;
         }
 
         private void Start()
@@ -132,78 +207,83 @@ namespace Rocket.Core.Plugins
             foreach (var pair in FindAssembliesInDirectory(Environment.PluginsDirectory))
             {
                 if (!libraries.ContainsKey(pair.Key))
-                    libraries.Add(pair.Key, pair.Value);
+                    libraries.Add(pair.Key, (pair.Value.Item1, true));
             }
 
             List<Assembly> pluginAssemblies = LoadAssembliesFromDirectory(Environment.PluginsDirectory);
 
             List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(pluginAssemblies, "IRocketPlugin");
+
             foreach (Type pluginType in pluginImplementations)
             {
                 AssemblyName assemblyName = pluginType.Assembly.GetName();
-                
+
+                // Ensure any dependency plugins are loaded/instantiated first
+                EnsurePluginGameObjectsForDependencies(pluginType.Assembly);
+
+                Logger.Log($"[loadPlugins] {assemblyName.Name} domain: {pluginDomains[assemblyName.Name].Item1}");
+
                 GameObject plugin = new(pluginType.Name, pluginType);
                 DontDestroyOnLoad(plugin);
+
                 string pluginName = assemblyName.Name;
-                // If the plugin is missing a lib, it will be removed from pluginDomains so we can just skip it
-                if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) domain)) continue;
-                domain.Item2 = plugin;
-                pluginDomains[pluginName] = domain;
+                if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) domainTuple)) continue;
+
+                domainTuple.Item2 = plugin;
+                pluginDomains[pluginName] = domainTuple;
             }
+
             OnPluginsLoaded.TryInvoke();
         }
 
         private void unloadPlugins()
         {
-            foreach (var kv in pluginDomains)
+            foreach (var kv in pluginDomains.ToArray())
             {
                 try
                 {
-                    Logging.Logger.LogWarning($"Unloading {kv.Key} domain and game object");
+                    Logger.LogWarning("Unloading " + kv.Key + " domain and game object");
 
                     if (kv.Value.Item2 != null)
-                    {
                         Destroy(kv.Value.Item2);
-                    }
 
                     if (kv.Value.Item1 != IntPtr.Zero)
-                    {
-                        mono_hr_unload_domain(kv.Value.Item1);    
-                    }
+                        MonoHrNative.mono_hr_unload_domain(kv.Value.Item1);
                 }
                 catch (Exception e)
                 {
-                    Logging.Logger.LogError(e, "Failed to unload plugin domain: " + kv.Key);
+                    Logger.LogError(e, "Failed to unload plugin domain: " + kv.Key);
                 }
             }
 
             pluginDomains.Clear();
         }
 
-        internal void UnloadPlugin(Assembly assembly)
+        internal void UnloadPlugin(AssemblyName assemblyName)
         {
-            AssemblyName assemblyName = assembly.GetName();
-            libraries.Remove(assemblyName);
+            // Remove by key match on name (AssemblyName.Equals can be strict)
+            AssemblyName keyToRemove = libraries.Keys.FirstOrDefault(k => k.Name == assemblyName.Name);
+            if (keyToRemove != null)
+                libraries.Remove(keyToRemove);
+
             string pluginName = assemblyName.Name;
 
-            if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) items)) return;
-            
+            if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) items))
+                return;
+
             try
             {
-                if (items.Item2 is not null)
-                {
-                    Destroy(items.Item2);    
-                }
+                if (items.Item2 != null)
+                    Destroy(items.Item2);
+
                 if (items.Item1 != IntPtr.Zero)
-                {
-                    mono_hr_unload_domain(items.Item1);
-                }
+                    MonoHrNative.mono_hr_unload_domain(items.Item1);
 
                 pluginDomains.Remove(pluginName);
             }
             catch (Exception e)
             {
-                Logging.Logger.LogError(e, "Failed to unload plugin domain: " + pluginName);
+                Logger.LogError(e, "Failed to unload plugin domain: " + pluginName);
             }
         }
 
@@ -213,38 +293,59 @@ namespace Rocket.Core.Plugins
             loadPlugins();
         }
 
-        /// <summary>
-        /// Replacement for GetAssembliesFromDirectory using AssemblyName as key rather than string.
-        /// </summary>
-        private static Dictionary<AssemblyName, string> FindAssembliesInDirectory(string directory)
+        internal static List<Assembly> LoadAssembliesFromDirectory(string directory, string extension = "*.dll")
         {
-            Dictionary<AssemblyName, string> l = new();
-            IEnumerable<FileInfo> libraries = new DirectoryInfo(directory).GetFiles("*.dll", SearchOption.AllDirectories);
-            foreach (FileInfo library in libraries)
+            List<Assembly> assemblies = [];
+            FileInfo[] pluginFiles = new DirectoryInfo(directory).GetFiles(extension, SearchOption.AllDirectories);
+
+            foreach (FileInfo plugin in pluginFiles)
+            {
+                Assembly assembly = LoadAssemblyFromPath(plugin.FullName);
+                if (assembly == null)
+                    continue;
+
+                assemblies.Add(assembly);
+            }
+
+            return assemblies;
+        }
+
+        // Replacement for GetAssembliesFromDirectory using AssemblyName as key
+        private static Dictionary<AssemblyName, (string, bool)> FindAssembliesInDirectory(string directory)
+        {
+            Dictionary<AssemblyName, (string, bool)> map = new();
+            FileInfo[] dlls = new DirectoryInfo(directory).GetFiles("*.dll", SearchOption.AllDirectories);
+
+            foreach (FileInfo dll in dlls)
             {
                 try
                 {
-                    AssemblyName name = AssemblyName.GetAssemblyName(library.FullName);
-                    l.Add(name, library.FullName);
+                    AssemblyName name = AssemblyName.GetAssemblyName(dll.FullName);
+                    map.Add(name, (dll.FullName, false));
                 }
                 catch
                 {
+                    // ignore non-managed or unreadable files
                 }
             }
 
-            return l;
+            return map;
         }
 
-        private static bool ShouldSkipPreload(AssemblyName an)
+        private static bool ShouldSkipPreload(string n)
         {
-            // Skip domain-neutral/BCL/Unity assemblies
-            string n = an.Name;
+            if (string.IsNullOrEmpty(n)) return true;
             if (string.Equals(n, "mscorlib", StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(n, "netstandard", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(n, "com.rlabrecque.steamworks.net", StringComparison.OrdinalIgnoreCase)) return true;
             if (n.StartsWith("System", StringComparison.OrdinalIgnoreCase)) return true;
             if (n.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase)) return true;
             if (n.StartsWith("Mono.", StringComparison.OrdinalIgnoreCase)) return true;
-            if (n.StartsWith("Unity", StringComparison.OrdinalIgnoreCase)) return true; // UnityEngine.*, Unity.*
+            if (n.StartsWith("Unity", StringComparison.OrdinalIgnoreCase)) return true;
+            if (n.StartsWith("Rocket", StringComparison.OrdinalIgnoreCase)) return true;
+            if (n.StartsWith("SDG.", StringComparison.OrdinalIgnoreCase)) return true;
+            // Some old plugins may still reference the 'Assembly-CSharp-firstpass'
+            if (n.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
 
@@ -261,9 +362,115 @@ namespace Rocket.Core.Plugins
             }
         }
 
-        private static void PreloadDomainDependencies(
-            IntPtr domain,
-            IEnumerable<string> candidateDllPaths)
+        private static string FindAssemblyPathBySimpleName(string simpleName)
+        {
+            foreach (var kv in libraries)
+            {
+                if (string.Equals(kv.Key.Name, simpleName, StringComparison.OrdinalIgnoreCase))
+                    return kv.Value.Path;
+            }
+
+            return null;
+        }
+
+        // Load referenced plugin assemblies into the given domain, recursively
+        private static Assembly EnsurePluginAssemblyDependencies(IntPtr domain, Assembly rootAsm)
+        {
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+            Queue<string> queue = new();
+
+            AssemblyName assemblyName = rootAsm.GetName();
+            AssemblyName[] refs;
+            try
+            {
+                refs = rootAsm.GetReferencedAssemblies();
+            }
+            catch
+            {
+                return null;
+            }
+
+            foreach (AssemblyName an in refs)
+            {
+                if (!ShouldSkipPreload(an.Name))
+                    queue.Enqueue(an.Name);
+            }
+
+            while (queue.Count > 0)
+            {
+                string name = queue.Dequeue();
+                string path = FindAssemblyPathBySimpleName(name);
+                if (string.IsNullOrEmpty(path))
+                {
+                    Logger.LogWarning($"[EnsurePluginAssemblyDependencies] Path not found for {name}");
+                    continue;
+                }
+
+                if (pluginDomains.TryGetValue(name, out (IntPtr, GameObject) domainTuple))
+                {
+                    Logger.LogWarning($"[EnsurePluginAssemblyDependencies] Found already set up domain for {name}");
+
+                    string selfPath = FindAssemblyPathBySimpleName(assemblyName.Name);
+                    R.Plugins.UnloadPlugin(assemblyName);
+                    Assembly assembly = TryLoadIntoDomain(domainTuple.Item1, selfPath);
+                    pluginDomains.Add(assembly.GetName().Name, (domainTuple.Item1, null));
+                    return assembly;
+                }
+
+                // Plugin haven't been loaded yet so let's add it into our domain
+                if (libraries.Where(c => c.Value.IsPlugin).Any(c => c.Key.Name == name))
+                {
+                    Logger.LogWarning($"[EnsurePluginAssemblyDependencies] Dependency {name} is a plugin, adding it into own domain...");
+                    Assembly assembly = TryLoadIntoDomain(domain, path);
+
+                    pluginDomains.Add(assembly.GetName().Name, (domain, null));
+                    continue;
+                }
+
+                if (!seen.Add(name))
+                    continue;
+
+                Assembly depAsm = TryLoadIntoDomain(domain, path);
+                if (depAsm != null) continue;
+
+                Logger.LogWarning($"[EnsurePluginAssemblyDependencies] {assemblyName.Name} failed to load {name} into it's own domain");
+            }
+
+            return null;
+        }
+
+        // Ensure dependent plugins (by simple name) have GameObjects first
+        private void EnsurePluginGameObjectsForDependencies(Assembly asm)
+        {
+            AssemblyName[] refs;
+            try
+            {
+                refs = asm.GetReferencedAssemblies();
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (AssemblyName an in refs)
+            {
+                if (ShouldSkipPreload(an.Name))
+                    continue;
+                if (libraries.TryGetValue(an, out (string Path, bool IsPlugin) tuple) && !tuple.IsPlugin)
+                    continue;
+
+                string depPath = FindAssemblyPathBySimpleName(an.Name);
+                if (string.IsNullOrEmpty(depPath))
+                    continue;
+
+                if (pluginDomains.TryGetValue(an.Name, out (IntPtr, GameObject) depTuple) && depTuple.Item2 != null)
+                    continue;
+
+                _ = ForceLoadPlugin(depPath);
+            }
+        }
+
+        private static void PreloadDomainDependencies(IntPtr domain, IEnumerable<string> candidateDllPaths)
         {
             HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
 
@@ -279,28 +486,13 @@ namespace Rocket.Core.Plugins
                     continue;
                 } // not a managed assembly
 
-                if (ShouldSkipPreload(an)) continue;
+                if (ShouldSkipPreload(an.Name)) continue;
                 if (loaded.Contains(an.Name)) continue;
 
                 Assembly dep = TryLoadIntoDomain(domain, p);
                 if (dep != null)
                     loaded.Add(an.Name);
             }
-        }
-
-        public static List<Assembly> LoadAssembliesFromDirectory(string directory, string extension = "*.dll")
-        {
-            List<Assembly> assemblies = [];
-            IEnumerable<FileInfo> pluginFiles = new DirectoryInfo(directory).GetFiles(extension, SearchOption.AllDirectories);
-
-            foreach (FileInfo plugin in pluginFiles)
-            {
-                Assembly assembly = LoadAssemblyFromPath(plugin.FullName);
-                if(assembly == null) continue;
-                assemblies.Add(assembly);
-            }
-
-            return assemblies;
         }
 
         private static Assembly LoadAssemblyFromPath(string fullPath)
@@ -316,42 +508,47 @@ namespace Rocket.Core.Plugins
             }
 
             string pluginName = pluginAssemblyName.Name;
-            if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) items) || items.Item1 == IntPtr.Zero)
-            {
-                items.Item1 = mono_hr_create_domain($"Plugin:{pluginName}");
-                if (items.Item1 == IntPtr.Zero)
-                {
-                    Logging.Logger.LogError($"Failed to create AppDomain for plugin {pluginName}");
-                    return null;
-                }
+            if (libraries.TryGetValue(pluginAssemblyName, out (string Path, bool IsPlugin) libTuple) && !libTuple.IsPlugin)
+                return null;
 
-                pluginDomains[pluginName] = (items.Item1, null);
+            if (pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) tuple)) return null;
+
+            tuple.Item1 = MonoHrNative.mono_hr_create_domain("Plugin:" + pluginName);
+            if (tuple.Item1 == IntPtr.Zero)
+            {
+                Logger.LogError("Failed to create AppDomain for plugin " + pluginName);
+                return null;
             }
+
+            pluginDomains[pluginName] = (tuple.Item1, null);
 
             try
             {
-                // 1) Preload shared libs into this domain (e.g., Rocket.Core/API)
-                // 'libraries' should already be populated from Environment.LibrariesDirectory
-                PreloadDomainDependencies(items.Item1, libraries.Values);
+                // 1) Preload shared libs into this domain
+                PreloadDomainDependencies(tuple.Item1, libraries.Values.Where(c => !c.IsPlugin).Select(c => c.Path));
 
-                Logging.Logger.Log("Domain dependencies loaded, loading plugin...");
-                
                 // 2) Load the plugin itself
-                Assembly assembly = TryLoadIntoDomain(items.Item1, fullPath);
+                Assembly assembly = TryLoadIntoDomain(tuple.Item1, fullPath);
                 if (assembly == null)
                 {
-                    Logging.Logger.LogError($"mono_hr_load_plugin returned null for {pluginName}");
+                    Logger.LogError("mono_hr_load_plugin returned null for " + pluginName);
                     return null;
                 }
 
+                // 3) Preload its non-framework referenced libraries
+                Assembly newAssembly = EnsurePluginAssemblyDependencies(tuple.Item1, assembly);
+
+                if (newAssembly != null) return newAssembly; // It got loaded into a dependency domain
+
                 List<Type> types = RocketHelper.GetTypesFromInterface(assembly, "IRocketPlugin").FindAll(x => !x.IsAbstract);
+
                 if (types.Count == 1)
                 {
-                    Logging.Logger.Log($"Loaded {assembly.GetName().Name} into its own domain from {fullPath}");
+                    Logger.Log("Loaded " + assembly.GetName().Name + " into its own domain from " + fullPath);
                     return assembly;
                 }
 
-                Logging.Logger.LogError("Invalid or outdated plugin assembly: " + assembly.GetName().Name);
+                Logger.LogError("Invalid or outdated plugin assembly: " + assembly.GetName().Name);
             }
             catch (BadImageFormatException)
             {
@@ -359,7 +556,7 @@ namespace Rocket.Core.Plugins
             }
             catch (Exception ex)
             {
-                Logging.Logger.LogError(ex, "Could not load plugin assembly: " + pluginName);
+                Logger.LogError(ex, "Could not load plugin assembly: " + pluginName);
             }
 
             return null;

@@ -182,7 +182,7 @@ namespace Rocket.Core.Plugins
             R.Commands.DeregisterFromAssembly(Assembly);
             Unload();
             this.state = state;
-            R.Plugins.UnloadPlugin(Assembly);
+            R.Plugins.UnloadPlugin(Assembly.GetName());
         }
 
         private void OnEnable()

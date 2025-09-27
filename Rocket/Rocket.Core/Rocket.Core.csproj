@@ -283,6 +283,7 @@
     <Compile Include="Commands\RocketCommandCooldown.cs" />
     <Compile Include="Permissions\RocketPermissionsHelper.cs" />
     <Compile Include="Plugins\Icalls.cs" />
+    <Compile Include="Plugins\MonoHrNative.cs" />
     <Compile Include="Plugins\RocketPlugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Assets\Asset.cs" />
