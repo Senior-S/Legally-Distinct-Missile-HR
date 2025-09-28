@@ -1,29 +1,22 @@
-# Legally Distinct Missile
+# Legally Distinct Missile with hot reload support
 
-The **Legally Distinct Missile** (or LDM) is a fork of Rocket for Unturned maintained by the game developers (SDG) after the resignation of its original community team. Using this fork is recommended because it preserves compatibility, and has fixes for important legacy Rocket issues like multithreading exceptions and teleportation exploits.
+> [!NOTE]
+> This unturned module requires a custom mono version!  
+More info at my [mono fork](https://github.com/Senior-S/mono-appdomain-support/tree/unity-2021.3-mbe).
 
-## Installation
+## Important files
+This files contains the changes I made to implement the custom verison of mono  
+[**RocketPluginManager.cs**](https://github.com/Senior-S/Legally-Distinct-Missile-HR/blob/master/Rocket/Rocket.Core/Plugins/RocketPluginManager.cs)  
+[**Icalls**](https://github.com/Senior-S/Legally-Distinct-Missile-HR/blob/master/Rocket/Rocket.Core/Plugins/Icalls.cs)  
+[**RocketPlugin**](https://github.com/Senior-S/Legally-Distinct-Missile-HR/blob/master/Rocket/Rocket.Core/Plugins/RocketPlugin.cs)  
+[**Rocket command**](https://github.com/Senior-S/Legally-Distinct-Missile-HR/blob/master/Rocket.Unturned/Commands/CommandRocket.cs#L82)  
 
-The dedicated server includes the latest version, so an external download is not necessary:
-1. Copy the Rocket.Unturned module from the game's Extras directory.
-2. Paste it into the game's Modules directory.
+## Installation for hot reload
 
-## Contributing
-
-The goals of this repository are to maintain compatibility with Unturned, maintain backwards compatibility with plugins, and fix bugs. Changes outside that scope will be made to the Unturned API rather than reworking the Rocket API. New plugins should ideally be using the game API where possible.
-
-Issues are monitored and will be discussed, but pull requests will not be directly merged.
-
-## Resources
-
-fr34kyn01535 has listed all of the original plugins in a post to the /r/RocketMod subreddit: [List of plugins from the old repository](https://www.reddit.com/r/rocketmod/comments/ek4i7b/)
-
-The RocketMod organization on GitHub hosts several related archived projects: [RocketMod (Abandoned)](https://github.com/RocketMod)
-
-## History
-
-On the 20th of December 2019 Sven Mawby "fr34kyn01535" and Enes Sadık Özbek "Trojaner" officially ceased maintenance of Rocket. They kindly released the source code under the MIT license. [Read their full farewell statement here.](https://github.com/RocketMod/Rocket/blob/master/Farewell.md)
-
-Following their resignation SDG forked the repository to continue maintenance in sync with the game.
-
-On the 2nd of June 2020 fr34kyn01535 requested the fork be rebranded to help distance himself from the project.
+1. Download the latest version of the mono library at  
+2. Copy it into `U3DS\MonoBleedingEdge\EmbedRuntime`.
+> [!IMPORTANT]  
+> Remember to make a backup of **mono-2.0-bdwgc.dll** before replacing it by the custom version!
+3. Download the latest module release.
+4. Extract the .zip and copy the Rocket.Unturned.HR module folder.
+5. Paste it into `U3DS\Modules` folder.

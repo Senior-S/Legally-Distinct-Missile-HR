@@ -63,31 +63,7 @@ namespace Rocket.Core.Plugins
             if (assembly == null)
                 return null;
 
-            List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(assembly, "IRocketPlugin");
-
-            foreach (Type pluginType in pluginImplementations)
-            {
-                try
-                {
-                    string pluginName = pluginType.Assembly.GetName().Name;
-
-                    GameObject plugin = new(pluginType.Name, pluginType);
-                    DontDestroyOnLoad(plugin);
-
-                    if (!pluginDomains.TryGetValue(pluginName, out (IntPtr, GameObject) domainTuple))
-                    {
-                        Destroy(plugin);
-                        continue;
-                    }
-
-                    domainTuple.Item2 = plugin;
-                    pluginDomains[pluginName] = domainTuple;
-                }
-                catch
-                {
-                    Logger.LogError($"Error loading {pluginType.Name}!");
-                }
-            }
+            LoadPluginGameObject(assembly);
 
             return GetPlugin(assembly.GetName().Name);
         }
@@ -212,7 +188,14 @@ namespace Rocket.Core.Plugins
 
             List<Assembly> pluginAssemblies = LoadAssembliesFromDirectory(Environment.PluginsDirectory);
 
-            List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(pluginAssemblies, "IRocketPlugin");
+            pluginAssemblies.ForEach(LoadPluginGameObject);
+
+            OnPluginsLoaded.TryInvoke();
+        }
+
+        private static void LoadPluginGameObject(Assembly assembly)
+        {
+            List<Type> pluginImplementations = RocketHelper.GetTypesFromInterface(assembly, "IRocketPlugin");
 
             foreach (Type pluginType in pluginImplementations)
             {
@@ -232,8 +215,6 @@ namespace Rocket.Core.Plugins
                 domainTuple.Item2 = plugin;
                 pluginDomains[pluginName] = domainTuple;
             }
-
-            OnPluginsLoaded.TryInvoke();
         }
 
         private void unloadPlugins()
@@ -422,8 +403,9 @@ namespace Rocket.Core.Plugins
                 {
                     Logger.LogWarning($"[EnsurePluginAssemblyDependencies] Dependency {name} is a plugin, adding it into own domain...");
                     Assembly assembly = TryLoadIntoDomain(domain, path);
-
+                    
                     pluginDomains.Add(assembly.GetName().Name, (domain, null));
+                    LoadPluginGameObject(assembly);
                     continue;
                 }
 
@@ -440,7 +422,7 @@ namespace Rocket.Core.Plugins
         }
 
         // Ensure dependent plugins (by simple name) have GameObjects first
-        private void EnsurePluginGameObjectsForDependencies(Assembly asm)
+        private static void EnsurePluginGameObjectsForDependencies(Assembly asm)
         {
             AssemblyName[] refs;
             try
@@ -466,7 +448,7 @@ namespace Rocket.Core.Plugins
                 if (pluginDomains.TryGetValue(an.Name, out (IntPtr, GameObject) depTuple) && depTuple.Item2 != null)
                     continue;
 
-                _ = ForceLoadPlugin(depPath);
+                _ = R.Plugins.ForceLoadPlugin(depPath);
             }
         }
 
