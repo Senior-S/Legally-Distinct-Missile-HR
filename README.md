@@ -13,7 +13,7 @@ This files contains the changes I made to implement the custom verison of mono
 
 ## Installation for hot reload
 
-1. Download the latest version of the mono library at  
+1. Download the latest version of the mono library [here](https://github.com/Senior-S/mono-appdomain-support/releases/tag/2021.3.29f1).
 2. Copy it into `U3DS\MonoBleedingEdge\EmbedRuntime`.
 > [!IMPORTANT]  
 > Remember to make a backup of **mono-2.0-bdwgc.dll** before replacing it by the custom version!
