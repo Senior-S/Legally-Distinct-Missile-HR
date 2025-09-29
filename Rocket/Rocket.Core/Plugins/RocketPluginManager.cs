@@ -92,8 +92,6 @@ namespace Rocket.Core.Plugins
         
         private static bool IsPluginName(string simpleName)
         {
-            // libraries maps AssemblyName -> (Path, IsPlugin)
-            // Find by simple name and mark if it is a plugin
             foreach (var kv in libraries)
                 if (string.Equals(kv.Key.Name, simpleName, StringComparison.OrdinalIgnoreCase))
                     return kv.Value.IsPlugin;
@@ -180,10 +178,15 @@ namespace Rocket.Core.Plugins
         {
             libraries = FindAssembliesInDirectory(Environment.LibrariesDirectory);
 
-            foreach (var pair in FindAssembliesInDirectory(Environment.PluginsDirectory))
+            foreach (var pair in FindAssembliesInDirectory(Environment.PluginsDirectory)) // Required to avoid issues
             {
-                if (!libraries.ContainsKey(pair.Key))
+                if (!libraries.Any(c => c.Key.Name.Equals(pair.Key.Name, StringComparison.OrdinalIgnoreCase)))
                     libraries.Add(pair.Key, (pair.Value.Item1, true));
+                else
+                {
+                    var match = libraries.FirstOrDefault(c => c.Key.Name.Equals(pair.Key.Name, StringComparison.OrdinalIgnoreCase));
+                    libraries[match.Key] = (libraries[match.Key].Path, true);
+                }
             }
 
             List<Assembly> pluginAssemblies = LoadAssembliesFromDirectory(Environment.PluginsDirectory);
